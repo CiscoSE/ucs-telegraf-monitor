@@ -1,3 +1,4 @@
+```
 PowerControl_0_PowerConsumedWatts
 PowerSupplies_0_LastPowerOutputWatts
 PowerSupplies_0_LineInputVoltage
@@ -21,3 +22,4 @@ Temperatures_8_ReadingCelsius
 Temperatures_9_ReadingCelsius
 Voltages_0_ReadingVolts
 Voltages_1_ReadingVolts
+```
