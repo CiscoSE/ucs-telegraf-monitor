@@ -1,0 +1,98 @@
+#import requests
+import time
+import base64
+import json
+import typing
+import urllib.error
+import urllib.parse
+import urllib.request
+from email.message import Message
+import ssl
+
+class Response(typing.NamedTuple):
+    body: str
+    headers: Message
+    status: int
+    error_count: int = 0
+    def json(self) -> typing.Any:
+        try:
+            output = json.loads(self.body)
+        except json.JSONDecodeError:
+            output = ""
+        return output
+def request(
+    url: str,
+    data: dict = None,
+    params: dict = None,
+    headers: dict = None,
+    method: str = "GET",
+    data_as_json: bool = True,
+    error_count: int = 0,
+) -> Response:
+    if not url.casefold().startswith("http"):
+        raise urllib.error.URLError("Incorrect and possibly insecure protocol in url")
+    method = method.upper()
+    request_data = None
+    headers = headers or {}
+    data = data or {}
+    params = params or {}
+    headers = {"Accept": "application/json", **headers}
+    if method == "GET":
+        params = {**params, **data}
+        data = None
+    if params:
+        url += "?" + urllib.parse.urlencode(params, doseq=True, safe="/")
+    if data:
+        if data_as_json:
+            request_data = json.dumps(data).encode()
+            headers["Content-Type"] = "application/json; charset=UTF-8"
+        else:
+            request_data = urllib.parse.urlencode(data).encode()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    httprequest = urllib.request.Request(
+        url, data=request_data, headers=headers, method=method
+    )
+    try:
+        with urllib.request.urlopen(httprequest, context=ctx) as httpresponse:
+            response = Response(
+                headers=httpresponse.headers,
+                status=httpresponse.status,
+                body=httpresponse.read().decode(
+                    httpresponse.headers.get_content_charset("utf-8")
+                ),
+            )
+    except urllib.error.HTTPError as e:
+        response = Response(
+            body=str(e.reason),
+            headers=e.headers,
+            status=e.code,
+            error_count=error_count + 1,
+        )
+
+    return response
+
+address = '10.82.128.201'
+username = 'tbacon'
+password = 'APItesting123'
+
+while True:
+    tempFile = open("temp.csv", "a")
+    supplyFile = open("supply.csv", "a")
+    headers = {'Authorization': 'Basic '+base64.b64encode((username+":"+password).encode('ascii')).decode("utf-8") }
+    response = request(url="https://"+address+"/redfish/v1/Chassis/1/Power", headers=headers, data={})
+    for supply in response.json()["PowerSupplies"]:
+        supplyItems = ["PowerOutputWatts","LineInputVoltage","Name","PowerInputWatts","LastPowerOutputWatts"]
+        for item in supplyItems:
+            supplyFile.write(str(supply[item])+",") #Cols key
+    supplyFile.write("\n")
+    response = request(url="https://"+address+"/redfish/v1/Chassis/1/Thermal", headers=headers, data={})
+    tempItems = ["TEMP_SENS_FRONT","DIMM_A1_TMP","DIMM_B1_TMP","DIMM_C1_TMP","DIMM_D1_TMP","DIMM_E1_TMP","DIMM_F1_TMP","DIMM_G1_TMP","DIMM_H1_TMP","P1_TEMP_SENS","PSU1_TEMP","PSU2_TEMP"]
+    for temp in response.json()["Temperatures"]:
+        tempFile.write(str(temp["ReadingCelsius"])+",") #Cols temp["Name"]
+    tempFile.write("\n")
+    tempFile.close()
+    supplyFile.close()
+    time.sleep(60)
+
