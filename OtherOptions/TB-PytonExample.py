@@ -22,6 +22,7 @@ import urllib.parse
 import urllib.request
 from email.message import Message
 import ssl
+import argparse
 
 class Response(typing.NamedTuple):
     body: str
@@ -87,12 +88,21 @@ def request(
 
     return response
 
-address = '10.82.128.201'
-username = 'tbacon'
-password = 'APItesting123'
+helpmsg = """
+    Help will eventually be here.
+"""
+argsParse = argparse.ArgumentParser(description=helpmsg)
+argsParse.add_argument('-a', '--address',         action='store', dest='address',         default='',      help="System to get API Data from")
+argsParse.add_argument('-u', '--user',            action='store', dest='username',        default='admin', help='User Name to access the API' )
+argsParse.add_argument('-p', '--password',        action='store', dest='password',        default='',      help="Password for API Access")
+argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDirectory", default='./',    help="Location directory for files")
+args=argsParse.parse_args()
+address = "{}".format(args.address)
+username = "{}".format(args.username)
+password = "{}".format(args.password)
 
 while True:
-    tempFile = open("temp.csv", "a")
+    tempFile = open("{0}{1}.csv".format(args.reportDirectory,address), "a")
     supplyFile = open("supply.csv", "a")
     headers = {'Authorization': 'Basic '+base64.b64encode((username+":"+password).encode('ascii')).decode("utf-8") }
     response = request(url="https://"+address+"/redfish/v1/Chassis/1/Power", headers=headers, data={})
