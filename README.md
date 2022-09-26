@@ -2,7 +2,7 @@
 This area documents configuration of Telegraf for monitoring power and thermal for UCS stand alone C series servers. This was written specifically for C125 servers, but should work with other stand along systems. This was written for a specific scenario / customer condition, and may reflect specific files relevant to that implementation. 
 
 ## Concept of Operations
-This process creates a database of event data stored in InfluxDB. InfluxDB is used because it was developed for the kind of data we need to ingest and has readily available tools for populating the database and displaying stored data with little to no development required. 
+This process creates a database of power and temperature statistics stored in InfluxDB. InfluxDB is used because it was developed for the kind of data we need to ingest and has readily available tools for populating the database and displaying stored data with little to no development required. 
 
 In this instance we use Telegraf to import redish API data into InfluxDB, and the data in the database is easily displayed using common tools such as Grafana. In this instance we demonstrate obtaining power and thermal information from a C125 UCS server using the redfish API.
 
@@ -41,8 +41,6 @@ influx -execute 'create database telegrafdb'
 influx -database telegraf -execute "CREATE USER telegrafu WITH PASSWORD 'Passw0rd123'"
 influx -database telegraf -execute "GRANT ALL ON telegrafdb TO telegrafu"
 ```
-## <p align="center">Obtaining InfluxDB</p> ##
-https://repos.influxdata.com/rhel
 
 ## <p align="center">Install and Configure Telegraf</p> ##
     Telegraf location (RHEL7)
