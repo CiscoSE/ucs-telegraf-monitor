@@ -102,10 +102,12 @@ username = "{}".format(args.username)
 password = "{}".format(args.password)
 
 while True:
-    tempFile = open("{0}{1}.csv".format(args.reportDirectory,address), "a")
-    supplyFile = open("supply.csv", "a")
+    tempFile = open("{0}{1}-temperature.csv".format(args.reportDirectory,address), "a")
+    supplyFile = open("{0}{1}-powersupply.csv".format(args.reportDirectory,address), "a")
     headers = {'Authorization': 'Basic '+base64.b64encode((username+":"+password).encode('ascii')).decode("utf-8") }
     response = request(url="https://"+address+"/redfish/v1/Chassis/1/Power", headers=headers, data={})
+    if not (200 <= response.status < 300):
+        print("Don't have access to the API requested") 
     for supply in response.json()["PowerSupplies"]:
         supplyItems = ["PowerOutputWatts","LineInputVoltage","Name","PowerInputWatts","LastPowerOutputWatts"]
         for item in supplyItems:
