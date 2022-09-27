@@ -26,9 +26,20 @@ import ssl
 import argparse
 import csv
 
+class Response(typing.NamedTuple):
+    body: str
+    headers: Message
+    status: int
+    error_count: int = 0
+    def json(self) -> typing.Any:
+        try:
+            output = json.loads(self.body)
+        except json.JSONDecodeError:
+            output = ""
+        return output
 
 class csvProcessing():
-    def _init_(self, headers: dict, args: dict, powerSupplyCSV, temperatureCSV ):
+    def __init__(self, headers: dict, args: dict, powerSupplyCSV, temperatureCSV ):
         self.address = args.address
         self.reportDirectory = args.reportDirectory
         self.powerSupplyCSV = powerSupplyCSV
@@ -36,7 +47,9 @@ class csvProcessing():
         self.headers = headers
         return
     def supplyProcessing(self):
-        response = self.request(url="https://{0}/redfish/v1/Chassis/1/Power".format(self.address), headers=self.headers)
+        supplyUrl="https://{0}/redfish/v1/Chassis/1/Power".format(self.address)
+        print(supplyUrl)
+        response = self.request(url=supplyUrl, headers=self.headers)
         for supply in response.json()["PowerSupplies"]:
             supplyItems = ["PowerOutputWatts","LineInputVoltage","Name","PowerInputWatts","LastPowerOutputWatts"]
         for item in supplyItems:
@@ -44,12 +57,13 @@ class csvProcessing():
         self.powerSupplyCSV.write("\n")
         return
     def temperatureProcessing(self):
-        response = request(url="https://"+address+"/redfish/v1/Chassis/1/Thermal", headers=headers)
+        response = self.request(url="https://{}/redfish/v1/Chassis/1/Thermal".format(self.address), headers=self.headers)
         tempItems = ["TEMP_SENS_FRONT","DIMM_A1_TMP","DIMM_B1_TMP","DIMM_C1_TMP","DIMM_D1_TMP","DIMM_E1_TMP","DIMM_F1_TMP","DIMM_G1_TMP","DIMM_H1_TMP","P1_TEMP_SENS","PSU1_TEMP","PSU2_TEMP"]
         for temp in response.json()["Temperatures"]:
             tempFile.write(str(temp["ReadingCelsius"])+",") #Cols temp["Name"]
         return
     def request(
+        self,
         url: str,
         headers: dict = None,
         method: str = "GET",
@@ -57,7 +71,6 @@ class csvProcessing():
     ) -> Response:
         method = method.upper()
         headers = headers or {}
-        params = params or {}
         headers = {"Accept": "application/json", **headers}
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -86,37 +99,24 @@ class csvProcessing():
             exit()
         return response
 
-class Response(typing.NamedTuple):
-    body: str
-    headers: Message
-    status: int
-    error_count: int = 0
-    def json(self) -> typing.Any:
-        try:
-            output = json.loads(self.body)
-        except json.JSONDecodeError:
-            output = ""
-        return output
-
-
 helpmsg = """
     This will poll power and temperature readings from a Cisco Stand-alone C series server using the Redfish API.
 """
 argsParse = argparse.ArgumentParser(description=helpmsg)
-argsParse.add_argument('-a', '--address',         action='store', dest='address',         default='',      help="System to get API Data from")
-argsParse.add_argument('-u', '--user',            action='store', dest='username',        default='admin', help='User Name to access the API' )
-argsParse.add_argument('-p', '--password',        action='store', dest='password',        default='',      help="Password for API Access")
-argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDirectory", default='./',    help="Location directory for files")
-argsParse.add_argument('-c', '--count', type=int  action='store', dest='counter',         default='1',     help="Number of times to repeat")
+argsParse.add_argument('-a', '--address',           action='store', dest='address',         default='',      help="System to get API Data from")
+argsParse.add_argument('-u', '--user',              action='store', dest='username',        default='admin', help='User Name to access the API' )
+argsParse.add_argument('-p', '--password',          action='store', dest='password',        default='',      help="Password for API Access")
+argsParse.add_argument('-r', '--reportDirectory',   action='store', dest="reportDirectory", default='./',    help="Location directory for files")
+argsParse.add_argument('-c', '--count', type=int, action='store', dest='counter',         default='1',     help="Number of times to repeat")
 args=argsParse.parse_args()
 address = "{}".format(args.address)
 username = "{}".format(args.username)
 password = "{}".format(args.password)
 
 headers = {'Authorization': 'Basic '+base64.b64encode((username+":"+password).encode('ascii')).decode("utf-8") }
-supplyFile = open("{0}{1}-powersupply.csv".format(self.reportDirectory,self.address), "a")
-tempFile = open("{0}{1}-temperature.csv".format(self.reportDirectory,self.address), "a")
-csvObject = csvProcessing(headers=headers,args=args,powersupplyCSV=supplyFile,temperatureCSV=tempFile)
+supplyFile = open("{0}{1}-powersupply.csv".format(args.reportDirectory,address), "a")
+tempFile = open("{0}{1}-temperature.csv".format(args.reportDirectory,address), "a")
+csvObject = csvProcessing(headers=headers,args=args,powerSupplyCSV=supplyFile,temperatureCSV=tempFile)
 while True:        
     csvObject.supplyProcessing()
     csvObject.temperatureProcessing()    
