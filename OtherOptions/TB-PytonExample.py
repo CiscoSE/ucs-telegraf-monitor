@@ -44,8 +44,6 @@ def request(
     data_as_json: bool = True,
     error_count: int = 0,
 ) -> Response:
-    if not url.casefold().startswith("http"):
-        raise urllib.error.URLError("Incorrect and possibly insecure protocol in url")
     method = method.upper()
     request_data = None
     headers = headers or {}
