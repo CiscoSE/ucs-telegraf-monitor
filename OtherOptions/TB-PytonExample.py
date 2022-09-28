@@ -23,8 +23,24 @@ import urllib.parse
 import urllib.request
 from email.message import Message
 import ssl
+import os
 import argparse
 import csv
+
+class writeEvents():
+    noColor = '\x1b[0m'
+    INFO = '\033[32m'
+    WARN = '\033[33m'
+    FAIL = '\033[31m'
+    def toScreen(self, msg: str, msgType: str='INFO', exitOnFail: bool=False):
+        if msgType == 'INFO':
+            print(f"[ {self.INFO}INFO{self.noColor} ] {msg}")
+        elif msgType == 'WARN':
+            print(f"[ {self.WARN}WARN{self.noColor} ] {msg}")
+        elif msgType == "FAIL":
+            print(f"[ {self.FAIL}FAIL{self.noColor} ] {msg}")
+            if exitOnFail == True: exit()
+        return
 
 class Response(typing.NamedTuple):
     body: str
@@ -99,35 +115,67 @@ class csvProcessing():
             exit()
         return response
 
+class csvProcessing():
+    def fileTest(self,fileName):
+        if args.verbose > 2: writeEvents().toScreen(msg="\tDoes this path exist?")
+        if os.path.exists(fileName):
+            if args.verbose > 2: writeEvents().toScreen(msg="\tFile Found.")
+            return True
+        else:
+            if args.verbose > 2: writeEvents().toScreen(msg="\tFile Not Found")
+            return False
+        return
+
+class powerSupplyProcessing():
+    #def __init__(self):
+    #    return
+    def newOrOldCSV(self):
+        powerSupplyFileName = "{0}{1}-powersupply.csv".format(args.reportDirectory,args.address)
+        # For basic logging when some output is required.  
+        if args.verbose > 0: writeEvents().toScreen(msg="Start Processing Temperature Data - CSV Assignment Starting")
+        if args.verbose > 1: writeEvents().toScreen(msg="Power Supply File Name: {}".format(powerSupplyFileName))
+        if csvProcessing().fileTest(powerSupplyFileName) == False:
+            #TODO Create a new file with standard fields
+            exit()
+        else:
+            #TODO Check to see if we have the right fields in the file
+            #TODO Rename the existing file if the fields are wrong, and return an object for a new file
+            #TODO Return an object with the existing file if the fields are right.
+            exit()
+        # Check for existing File
+
+        return
+
+
 helpmsg = """
     This will poll power and temperature readings from a Cisco Stand-alone C series server using the Redfish API.
 """
 argsParse = argparse.ArgumentParser(description=helpmsg)
-argsParse.add_argument('-a', '--address',           action='store', dest='address',         default='',      help="System to get API Data from")
-argsParse.add_argument('-u', '--user',              action='store', dest='username',        default='admin', help='User Name to access the API' )
-argsParse.add_argument('-p', '--password',          action='store', dest='password',        default='',      help="Password for API Access")
-argsParse.add_argument('-r', '--reportDirectory',   action='store', dest="reportDirectory", default='./',    help="Location directory for files")
+argsParse.add_argument('-a', '--address',         action='store', dest='address',         default='',      help="System to get API Data from")
+argsParse.add_argument('-u', '--user',            action='store', dest='username',        default='admin', help='User Name to access the API' )
+argsParse.add_argument('-p', '--password',        action='store', dest='password',        default='',      help="Password for API Access")
+argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDirectory", default='./',    help="Location directory for files")
 argsParse.add_argument('-c', '--count', type=int, action='store', dest='counter',         default='1',     help="Number of times to repeat")
+argsParse.add_argument('-v',                      action='count', dest='verbose',         default=0,       help="Used for Verbose Logging")
 args=argsParse.parse_args()
-address = "{}".format(args.address)
-username = "{}".format(args.username)
-password = "{}".format(args.password)
 
-headers = {'Authorization': 'Basic '+base64.b64encode((username+":"+password).encode('ascii')).decode("utf-8") }
-supplyFile = open("{0}{1}-powersupply.csv".format(args.reportDirectory,address), "a")
-tempFile = open("{0}{1}-temperature.csv".format(args.reportDirectory,address), "a")
-csvObject = csvProcessing(headers=headers,args=args,powerSupplyCSV=supplyFile,temperatureCSV=tempFile)
 bailout=False
 counter = args.counter
 while (bailout == False ):
-    csvObject.supplyProcessing()
-    csvObject.temperatureProcessing()    
-    print(f"Counter Equals: {counter}")
+    # For basic logging when some output is required. 
+    if args.verbose > 0: print("Counter Equals: {}".format(counter))
+    # TODO Call Processing of PowerSupply Data
+    powerSupplyProcessing().newOrOldCSV()
+    # TODO Call Processing of Temperature Data
+
+    # How we exit the loop. If 
     if counter == 1:
         bailout = True
     else:
         time.sleep(5)
+        #If the counter = 0 we will never exit. 
         if counter != 0:
+            # Otherwise we are counting down to 1.
             counter = counter - 1
 
 tempFile.write("\n")
