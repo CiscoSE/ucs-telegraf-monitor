@@ -117,11 +117,19 @@ headers = {'Authorization': 'Basic '+base64.b64encode((username+":"+password).en
 supplyFile = open("{0}{1}-powersupply.csv".format(args.reportDirectory,address), "a")
 tempFile = open("{0}{1}-temperature.csv".format(args.reportDirectory,address), "a")
 csvObject = csvProcessing(headers=headers,args=args,powerSupplyCSV=supplyFile,temperatureCSV=tempFile)
-while True:        
+bailout=False
+counter = args.counter
+while (bailout == False ):
     csvObject.supplyProcessing()
     csvObject.temperatureProcessing()    
-    time.sleep(10)
-    exit()
+    print(f"Counter Equals: {counter}")
+    if counter == 1:
+        bailout = True
+    else:
+        time.sleep(5)
+        if counter != 0:
+            counter = counter - 1
+
 tempFile.write("\n")
 tempFile.close()
 supplyFile.close()
