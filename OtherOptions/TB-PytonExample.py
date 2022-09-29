@@ -43,6 +43,7 @@ argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDi
 argsParse.add_argument('-c', '--count', type=int, action='store', dest='counter',         default='1',     help="Number of times to repeat")
 argsParse.add_argument('-v',                      action='count', dest='verbose',         default=0,       help="Used for Verbose Logging")
 argsParse.add_argument('--failCount',   type=int, action='store', dest='failCount',       default=10,      help="Number of times to retry a failed connection - Only applies when counter is set to 0")
+argsParse.add_argument('--waitTimer',   type=int, action='store', dest='waitTimer',       default=120,     help="When we repeat, how long do we wait between polling")
 args=argsParse.parse_args()
 
 powerSupplyFields = ["PowerOutputWatts","LineInputVoltage","Name","PowerInputWatts","LastPowerOutputWatts"]
@@ -82,11 +83,9 @@ class Response(typing.NamedTuple):
             output = ""
         return output
 
-
-
 class csvProcessing():
     def fileTest(self,fileName):
-        if args.verbose > 2: writeEvents().toScreen(msg="\tDoes this path exist?")
+        if args.verbose > 2: writeEvents().toScreen(msg="\tDoes this file Exist?")
         if os.path.exists(fileName):
             if args.verbose > 2: writeEvents().toScreen(msg="\tFile Found.")
             return True
@@ -153,11 +152,14 @@ class powerSupplyProcessing():
         date_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
         columnOrder = ['Time'] + powerSupplyFields
         for powerSupply in json.loads(jsonResponse)['PowerSupplies']:
+            if args.verbose > 2: writeEvents().toScreen(msg='Power Supply Data:\n\t{0}'.format(powerSupply))
             powerSupplyProperties = {'Time':"{0}".format(date_time_str)}
             for item in powerSupplyFields:
                 if item in powerSupply:
+                    if args.verbose > 2: writeEvents().toScreen(msg='Found {0} in list of Power Supplies'.format(item))
                     powerSupplyProperties[item] = str(powerSupply[item])
                 else:
+                   if args.verbose > 2: writeEvents().toScreen(msg='{0} was not found in returned data'.format(item))
                    powerSupplyProperties[item] = "No Data Present" 
             powerSupplyCSVObject.writerow([powerSupplyProperties.get(column, None) for column in columnOrder])
         return
@@ -211,11 +213,16 @@ class temperatureProcessing():
         columnOrder = ['Time'] + temperatureFields
         temperatureDictionary = {'Time': date_time_str}
         for item in temperatureFields:
+            found = False
             temperatureDictionary[item] = None
             for temperature in json.loads(jsonResponse)['Temperatures']:
+                if args.verbose > 2: writeEvents().toScreen(msg='Temperature Data:\n\t{0}'.format(temperature))
                 if temperature['Name'] == item:
+                    if args.verbose > 2: writeEvents().toScreen(msg='Found {0} in temperature data'.format(item))
                     temperatureDictionary[item] = temperature['ReadingCelsius']
-            if temperatureDictionary[item] == None:
+                    found = True
+            if found == False:
+                if args.verbose > 2: writeEvents().toScreen(msg='{0} was not found in returned data'.format(item))
                 temperatureDictionary[item]="No Data Found"
         temperatureCSVObject.writerow([temperatureDictionary.get(column, None) for column in columnOrder])
         return 
@@ -248,6 +255,7 @@ class httpRequest():
         return response
     
     def getAuthToken(self):
+        if args.verbose > 0: writeEvents().toScreen(msg='Starting process to get token')
         tokenRequest = json.dumps({'UserName':"{}".format(args.username),"Password":"{0}".format(args.password)})
         tokenURL = "https://{}/redfish/v1/SessionService/Sessions".format(args.address)
         tokenResponse = self.getUrl(url=tokenURL, data=tokenRequest.encode("utf-8"), method='POST',headers=processHeaders())
@@ -264,7 +272,7 @@ class httpRequest():
 
 while (bailout == False ):
     # For basic logging when some output is required. 
-    if args.verbose > 0: print("Counter Equals: {}".format(counter))
+    if args.verbose > 0: writeEvents().toScreen("Counter Equals: {}".format(counter))
     token = httpRequest().getAuthToken()
     powerSupplyCSVObject = powerSupplyProcessing().newOrOldCSV()
     powerSupplyProcessing().pollPowerSupply()
@@ -275,7 +283,7 @@ while (bailout == False ):
     if counter == 1:
         bailout = True
     else:
-        time.sleep(5)
+        time.sleep(args.waitTimer)
         #If the counter = 0 we will never exit. 
         if counter != 0:
             # Otherwise we are counting down to 1.
