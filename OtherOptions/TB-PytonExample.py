@@ -13,7 +13,11 @@ or implied.
 """
 
 #import requests
+from audioop import tostereo
+from datetime import datetime
+from distutils.command.install_egg_info import to_filename
 from logging.config import dictConfig
+from symbol import power
 import time
 import base64
 import json
@@ -26,6 +30,24 @@ import ssl
 import os
 import argparse
 import csv
+
+helpmsg = """
+    This will poll power and temperature readings from a Cisco Stand-alone C series server using the Redfish API.
+"""
+argsParse = argparse.ArgumentParser(description=helpmsg)
+argsParse.add_argument('-a', '--address',         action='store', dest='address',         default='',      help="System to get API Data from")
+argsParse.add_argument('-u', '--user',            action='store', dest='username',        default='admin', help='User Name to access the API' )
+argsParse.add_argument('-p', '--password',        action='store', dest='password',        default='',      help="Password for API Access")
+argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDirectory", default='./',    help="Location directory for files")
+argsParse.add_argument('-c', '--count', type=int, action='store', dest='counter',         default='1',     help="Number of times to repeat")
+argsParse.add_argument('-v',                      action='count', dest='verbose',         default=0,       help="Used for Verbose Logging")
+argsParse.add_argument('--failCount',   type=int, action='store', dest='failCount',       default=10,      help="Number of times to retry a failed connection - Only applies when counter is set to 0")
+args=argsParse.parse_args()
+
+powerSupplyFields = ["PowerOutputWatts","LineInputVoltage","Name","PowerInputWatts","LastPowerOutputWatts"]
+failCount: int=args.failCount
+bailout: bool=False
+counter: int= args.counter
 
 class writeEvents():
     noColor = '\x1b[0m'
@@ -54,46 +76,89 @@ class Response(typing.NamedTuple):
             output = ""
         return output
 
+
+
 class csvProcessing():
-    def __init__(self, headers: dict, args: dict, powerSupplyCSV, temperatureCSV ):
-        self.address = args.address
-        self.reportDirectory = args.reportDirectory
-        self.powerSupplyCSV = powerSupplyCSV
-        self.temperatureCSV = temperatureCSV
-        self.headers = headers
+    def fileTest(self,fileName):
+        if args.verbose > 2: writeEvents().toScreen(msg="\tDoes this path exist?")
+        if os.path.exists(fileName):
+            if args.verbose > 2: writeEvents().toScreen(msg="\tFile Found.")
+            return True
+        else:
+            if args.verbose > 2: writeEvents().toScreen(msg="\tFile Not Found")
+            return False
         return
-    def supplyProcessing(self):
-        supplyUrl="https://{0}/redfish/v1/Chassis/1/Power".format(self.address)
-        print(supplyUrl)
-        response = self.request(url=supplyUrl, headers=self.headers)
-        for supply in response.json()["PowerSupplies"]:
-            supplyItems = ["PowerOutputWatts","LineInputVoltage","Name","PowerInputWatts","LastPowerOutputWatts"]
-        for item in supplyItems:
-            self.powerSupplyCSV.write(str(supply[item])+",") #Cols key
-        self.powerSupplyCSV.write("\n")
+
+def processHeaders():
+    base64EncodedAuth = base64.b64encode("{0}:{1}".format(args.username,args.password).encode('ascii')).decode('utf-8') 
+    if args.verbose > 2: writeEvents().toScreen(msg="Base64 Encoded String: {0}".format(base64EncodedAuth))
+    return  {"Authorization":"Basic {0}".format(base64EncodedAuth)}
+
+class powerSupplyProcessing():
+    #def __init__(self):
+    #    return
+    def newOrOldCSV(self):
+        powerSupplyFileName = "{0}{1}-powersupply.csv".format(args.reportDirectory,args.address)
+        # For basic logging when some output is required.  
+        if args.verbose > 0: writeEvents().toScreen(msg="Start Processing Temperature Data - CSV Assignment Starting")
+        if args.verbose > 1: writeEvents().toScreen(msg="Power Supply File Name: {}".format(powerSupplyFileName))
+        if (csvProcessing().fileTest(powerSupplyFileName) == False):
+            if args.verbose > 1: writeEvents().toScreen(msg="Creating a new file")
+            powerSupplyFileObject = open(powerSupplyFileName, 'w')
+            powerSupplyCSVWriter = csv.writer(powerSupplyFileObject)
+            powerSupplyCSVWriter.writerow(['Time'] + powerSupplyFields)  
+            return powerSupplyCSVWriter
+        else:
+            #TODO Check to see if we have the right fields in the file
+            #TODO Rename the existing file if the fields are wrong, and return an object for a new file
+            #TODO Return an object with the existing file if the fields are right.
+            powerSupplyFileObject = open(powerSupplyFileName, 'a')
+            powerSupplyCSVWriter = csv.writer(powerSupplyFileObject)
+            return powerSupplyCSVWriter
+    def pollPowerSupply(self):
+        global failCount
+        powerSupplyUrl="https://{0}/redfish/v1/Chassis/1/Power".format(args.address)
+        powerSupplyResponse = httpRequest().getUrl(url=powerSupplyUrl,headers=(processHeaders()))
+        if not (200 <= powerSupplyResponse.status < 300):
+            # Failed to talk to the API
+            if args.verbose > 0: writeEvents().toScreen(msg="Connection to API failed.\n\t{0}".format(powerSupplyResponse.status),msgType="WARN")
+            if args.count == 0 and failCount != 0:
+                if args.verbose > 0: writeEvents().toScreen(msg="\t{0} retries remain before script exit".format(failCount),msgType="WARN")
+                failAction = False
+                failCount = failCount - 1
+            else:
+                # To many failures. Script exists
+                failAction = True    
+            writeEvents().toScreen(msg="",msgType='FAIL',exitOnFail=failAction)
+            return
+        else:
+            #If we succeed at any point we reset the failure counter
+            if failCount < args.failCount: 
+                failCount = args.failCount
+            self.writeJSONResponseToFile(powerSupplyResponse.body)
+            #Write contents to CSV
         return
-    def temperatureProcessing(self):
-        response = self.request(url="https://{}/redfish/v1/Chassis/1/Thermal".format(self.address), headers=self.headers)
-        tempItems = ["TEMP_SENS_FRONT","DIMM_A1_TMP","DIMM_B1_TMP","DIMM_C1_TMP","DIMM_D1_TMP","DIMM_E1_TMP","DIMM_F1_TMP","DIMM_G1_TMP","DIMM_H1_TMP","P1_TEMP_SENS","PSU1_TEMP","PSU2_TEMP"]
-        for temp in response.json()["Temperatures"]:
-            tempFile.write(str(temp["ReadingCelsius"])+",") #Cols temp["Name"]
+    def writeJSONResponseToFile(self,jsonResponse):
+        now=datetime.now()
+        date_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        columnOrder = ['Time'] + powerSupplyFields
+        for powerSupply in json.loads(jsonResponse)['PowerSupplies']:
+            powerSupplyProperties = {'Time':"{0}".format(date_time_str)}
+            for item in powerSupplyFields:
+                if item in powerSupply:
+                    powerSupplyProperties[item] = str(powerSupply[item])
+                else:
+                   powerSupplyProperties[item] = "No Data Present" 
+            powerSupplyCSVObject.writerow([powerSupplyProperties.get(column, None) for column in columnOrder])
         return
-    def request(
-        self,
-        url: str,
-        headers: dict = None,
-        method: str = "GET",
-        error_count: int = 0,
-    ) -> Response:
-        method = method.upper()
-        headers = headers or {}
+
+class httpRequest():
+    def getUrl(self, url: str,headers: dict, method: str='GET'):
         headers = {"Accept": "application/json", **headers}
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        httprequest = urllib.request.Request(
-            url, headers=headers, method=method
-        )
+        httprequest = urllib.request.Request(url, headers=headers, method=method)
         try:
             with urllib.request.urlopen(httprequest, context=ctx) as httpresponse:
                 response = Response(
@@ -107,65 +172,20 @@ class csvProcessing():
             response = Response(
                 body=str(e.reason),
                 headers=e.headers,
-                status=e.code,
-                error_count=error_count + 1,
-            )
-        if not (200 <= response.status < 300):
-            print("Don't have access to the API requested") 
-            exit()
+                status=e.code
+        )
         return response
 
-class csvProcessing():
-    def fileTest(self,fileName):
-        if args.verbose > 2: writeEvents().toScreen(msg="\tDoes this path exist?")
-        if os.path.exists(fileName):
-            if args.verbose > 2: writeEvents().toScreen(msg="\tFile Found.")
-            return True
-        else:
-            if args.verbose > 2: writeEvents().toScreen(msg="\tFile Not Found")
-            return False
-        return
-
-class powerSupplyProcessing():
-    #def __init__(self):
-    #    return
-    def newOrOldCSV(self):
-        powerSupplyFileName = "{0}{1}-powersupply.csv".format(args.reportDirectory,args.address)
-        # For basic logging when some output is required.  
-        if args.verbose > 0: writeEvents().toScreen(msg="Start Processing Temperature Data - CSV Assignment Starting")
-        if args.verbose > 1: writeEvents().toScreen(msg="Power Supply File Name: {}".format(powerSupplyFileName))
-        if csvProcessing().fileTest(powerSupplyFileName) == False:
-            #TODO Create a new file with standard fields
-            exit()
-        else:
-            #TODO Check to see if we have the right fields in the file
-            #TODO Rename the existing file if the fields are wrong, and return an object for a new file
-            #TODO Return an object with the existing file if the fields are right.
-            exit()
-        # Check for existing File
-
-        return
 
 
-helpmsg = """
-    This will poll power and temperature readings from a Cisco Stand-alone C series server using the Redfish API.
-"""
-argsParse = argparse.ArgumentParser(description=helpmsg)
-argsParse.add_argument('-a', '--address',         action='store', dest='address',         default='',      help="System to get API Data from")
-argsParse.add_argument('-u', '--user',            action='store', dest='username',        default='admin', help='User Name to access the API' )
-argsParse.add_argument('-p', '--password',        action='store', dest='password',        default='',      help="Password for API Access")
-argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDirectory", default='./',    help="Location directory for files")
-argsParse.add_argument('-c', '--count', type=int, action='store', dest='counter',         default='1',     help="Number of times to repeat")
-argsParse.add_argument('-v',                      action='count', dest='verbose',         default=0,       help="Used for Verbose Logging")
-args=argsParse.parse_args()
 
-bailout=False
-counter = args.counter
 while (bailout == False ):
     # For basic logging when some output is required. 
     if args.verbose > 0: print("Counter Equals: {}".format(counter))
     # TODO Call Processing of PowerSupply Data
-    powerSupplyProcessing().newOrOldCSV()
+    powerSupplyCSVObject = powerSupplyProcessing().newOrOldCSV()
+    powerSupplyProcessing().pollPowerSupply()
+    exit()
     # TODO Call Processing of Temperature Data
 
     # How we exit the loop. If 
@@ -178,6 +198,5 @@ while (bailout == False ):
             # Otherwise we are counting down to 1.
             counter = counter - 1
 
-tempFile.write("\n")
-tempFile.close()
-supplyFile.close()
+
+
