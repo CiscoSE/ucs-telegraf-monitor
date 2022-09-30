@@ -25,7 +25,7 @@ Monitoring of 10.1.1.1 with the admin account for two polling cycles, creating r
 ```
 python3 ./TB-PythonExample.py -a 10.1.1.1 -u admin -p somepassword -c 2 -r /tmp/
 ```
-<br><br>
+<br>
 Note: The path provide for the -r argument must end with a / to be treated as a path and no checking is done to validate that the path is a directory. The entry you provide for the -r argument will be appended as a prefix to the name of the script. 
 
 <p align="center">Expected Output</p>
@@ -37,5 +37,7 @@ This example will poll 10.1.1.1 a single time and return one row for each power 
 The first row of each file contains the column headers separated by commas. Each additional row contains data collected. When files already exist, new rows are appended to the existing file. 
 
 ## Debugging Options
-
-
+When there is a need to debug, use the the verbose option to change the output. 
+    -v      Limit loggging with indications of basic activities. 
+    -vv     Detailed value responses. 
+    -vvv    Detailed output including raw Jason and HTML response data. 
