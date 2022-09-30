@@ -71,7 +71,7 @@ mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.conf.original
 cat <<EOF > /etc/telegraf/telegraf.conf
 [global_tags]
 [agent]
-  # This is not the default, and you can set it to how often you want to pull your servers. 
+  # This is not the default, and you can set it to how often you want to poll your servers. 
   interval = "30s"
   round_interval = true
   metric_batch_size = 1000
@@ -83,7 +83,7 @@ cat <<EOF > /etc/telegraf/telegraf.conf
   debug = false
   hostname = ""
   omit_hostname = true
-  # If do not want telegraf logs, you can remove this line. Once you have everthing working I would remove this.
+  # If do not want telegraf logs, you can remove this line. Once you have everything working I would remove this.
   logfile = "/var/log/telegraf/telegraf.log"
 EOF
 
