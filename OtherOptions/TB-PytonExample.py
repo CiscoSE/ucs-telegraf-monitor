@@ -41,7 +41,7 @@ argsParse.add_argument('-u', '--user',            action='store', dest='username
 argsParse.add_argument('-p', '--password',        action='store', dest='password',        default='',      help="Password for API Access")
 argsParse.add_argument('-r', '--reportDirectory', action='store', dest="reportDirectory", default='./',    help="Location directory for files")
 argsParse.add_argument('-c', '--count', type=int, action='store', dest='counter',         default='1',     help="Number of times to repeat")
-argsParse.add_argument('-v',                      action='count', dest='verbose',         default=0,       help="Used for Verbose Logging")
+argsParse.add_argument('-v',                      action='count', dest='verbose',         default=1,       help="Used for Verbose Logging")
 argsParse.add_argument('--failCount',   type=int, action='store', dest='failCount',       default=10,      help="Number of times to retry a failed connection - Only applies when counter is set to 0")
 argsParse.add_argument('--waitTimer',   type=int, action='store', dest='waitTimer',       default=120,     help="When we repeat, how long do we wait between polling")
 args=argsParse.parse_args()
@@ -85,7 +85,7 @@ class Response(typing.NamedTuple):
 
 class csvProcessing():
     def fileTest(self,fileName):
-        if args.verbose > 2: writeEvents().toScreen(msg="\tDoes this file Exist?")
+        if args.verbose > 0: writeEvents().toScreen(msg='Looking for existing .csv file: {}'.format(fileName))
         if os.path.exists(fileName):
             if args.verbose > 2: writeEvents().toScreen(msg="\tFile Found.")
             return True
@@ -96,10 +96,12 @@ class csvProcessing():
 
 def processHeaders():
     if token['X-Auth-Token'] == None:
+        if args.verbose >1: "We have a token, header will use it instead of basic authentication"
         base64EncodedAuth = base64.b64encode("{0}:{1}".format(args.username,args.password).encode('ascii')).decode('utf-8') 
         if args.verbose > 2: writeEvents().toScreen(msg="Base64 Encoded String: {0}".format(base64EncodedAuth))
         header = {"Authorization":"Basic {0}".format(base64EncodedAuth)}
     else:
+        if args.verbose >1: "We don't have a token,so we are using basic authentication"
         header = {"X-Auth-Token": "{0}".format(token["X-Auth-Token"])}
     return header
 
@@ -110,9 +112,8 @@ class powerSupplyProcessing():
         powerSupplyFileName = "{0}{1}-powersupply.csv".format(args.reportDirectory,args.address)
         # For basic logging when some output is required.  
         if args.verbose > 0: writeEvents().toScreen(msg="Start Processing Power Supply Data - CSV Assignment Starting")
-        if args.verbose > 1: writeEvents().toScreen(msg="Power Supply File Name: {}".format(powerSupplyFileName))
         if (csvProcessing().fileTest(powerSupplyFileName) == False):
-            if args.verbose > 1: writeEvents().toScreen(msg="Creating a new file")
+            if args.verbose > 1: writeEvents().toScreen(msg="\tCreating a new file")
             powerSupplyFileObject = open(powerSupplyFileName, 'w')
             powerSupplyCSVWriter = csv.writer(powerSupplyFileObject)
             powerSupplyCSVWriter.writerow(['Time'] + powerSupplyFields)  
@@ -120,7 +121,6 @@ class powerSupplyProcessing():
         else:
             #TODO Check to see if we have the right fields in the file
             #TODO Rename the existing file if the fields are wrong, and return an object for a new file
-            #TODO Return an object with the existing file if the fields are right.
             powerSupplyFileObject = open(powerSupplyFileName, 'a')
             powerSupplyCSVWriter = csv.writer(powerSupplyFileObject)
             return powerSupplyCSVWriter
@@ -164,8 +164,6 @@ class powerSupplyProcessing():
             powerSupplyCSVObject.writerow([powerSupplyProperties.get(column, None) for column in columnOrder])
         return
 class temperatureProcessing():
-    #def __init__(self):
-    #    return
     def newOrOldCSV(self):
         temperatureFileName = "{0}{1}-temperature.csv".format(args.reportDirectory,args.address)
         # For basic logging when some output is required.
@@ -179,8 +177,7 @@ class temperatureProcessing():
             return temperatureCSVWriter
         else:
             #TODO Check to see if we have the right fields in the file
-            #TODO Rename the existing file if the fields are wrong, and return an object for a new file
-            #TODO Return an object with the existing file if the fields are right.
+            #TODO Rename the existing file if the fields are wrong, and return an object for a new fil
             temperatureFileObject = open(temperatureFileName, 'a')
             temperatureCSVWriter = csv.writer(temperatureFileObject)
             return temperatureCSVWriter
@@ -251,7 +248,7 @@ class httpRequest():
                 headers=e.headers,
                 status=e.code
         )
-        if args.verbose > 2: writeEvents().toScreen(msg='Raw Response from HTML call\n{0}'.format(response.headers))
+        if args.verbose > 2: writeEvents().toScreen(msg='Raw Response from HTML call\n{0}{1}'.format(response.headers,response.body))
         return response
     
     def getAuthToken(self):
