@@ -1,5 +1,5 @@
 # Directions for Configuration of Telegraf for monitoring of UCS #
-This area documents configuration of Telegraf for monitoring power and thermal for UCS stand alone C series servers. This was written specifically for C125 servers, but should work with other stand along systems. This was written for a specific scenario / customer condition, and may reflect specific files relevant to that implementation. 
+This area documents configuration of Telegraf for monitoring power and thermal for UCS stand alone C series servers. This was written specifically for C125 servers, but should work with other stand alone C series servers. This was written for a specific scenario / customer condition, and may reflect specific files relevant to that implementation. 
 
 ## Concept of Operations
 This process creates a database of power and temperature statistics stored in InfluxDB. InfluxDB is used because it was developed for the kind of data we need to ingest and has readily available tools for populating the database and displaying stored data with little to no development required. 
